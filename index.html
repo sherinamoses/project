@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Smart Voice & Text Translator</title>
+
+<style>
+body{
+  background:#0b1622;
+  font-family: Poppins, Arial;
+  color:white;
+  margin:0;
+}
+
+.header{
+  text-align:center;
+  padding:20px;
+  font-size:24px;
+  font-weight:600;
+}
+
+.container{
+  width:90%;
+  max-width:1050px;
+  margin:auto;
+  display:flex;
+  justify-content:space-between;
+  gap:20px;
+}
+
+.card{
+  background:#101f2e;
+  padding:20px;
+  border-radius:14px;
+  width:48%;
+  box-shadow:0 0 15px rgba(0,0,0,.4);
+}
+
+.label{
+  font-size:13px;
+  opacity:0.8;
+}
+
+.row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:5px;
+}
+
+select{
+  background:#182d44;
+  color:white;
+  border:none;
+  padding:8px;
+  border-radius:7px;
+  font-size:14px;
+}
+
+textarea{
+  width:100%;
+  height:160px;
+  background:#0c1724;
+  border:none;
+  outline:none;
+  margin-top:8px;
+  color:white;
+  padding:10px;
+  font-size:17px;
+  border-radius:10px;
+  resize:none;
+}
+
+.outputBox{
+  width:100%;
+  height:180px;
+  background:#0c1724;
+  color:white;
+  padding:10px;
+  margin-top:8px;
+  border-radius:10px;
+  font-size:18px;
+}
+
+button{
+  background:#00c3ff;
+  border:none;
+  padding:10px 16px;
+  border-radius:10px;
+  font-size:15px;
+  cursor:pointer;
+  margin-top:10px;
+}
+
+button:hover{
+  background:#04a5d6;
+}
+
+.center{
+  text-align:center;
+  margin-top:25px;
+}
+
+/* -------- POPUP -------- */
+.popupMsg{
+  position:fixed;
+  top:10px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#ff4b4b;
+  color:white;
+  padding:10px 18px;
+  border-radius:8px;
+  font-size:15px;
+  z-index:9999;
+  box-shadow:0 0 10px rgba(0,0,0,.4);
+  display:none;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">🌍 Smart Voice + Text Translator</div>
+
+<div id="popup" class="popupMsg"></div>
+
+<div class="container">
+
+  <!-- LEFT -->
+  <div class="card">
+    
+    <div class="row">
+      <span class="label">INPUT</span>
+      <select id="fromLang">
+        <option value="en">English</option>
+        <option value="ta" selected>Tamil</option>
+      </select>
+    </div>
+
+    <textarea id="inputText"></textarea>
+
+    <button onclick="startVoice()">🎤 Speak</button>
+
+  </div>
+
+  <!-- RIGHT -->
+  <div class="card">
+
+    <div class="row">
+      <span class="label">OUTPUT</span>
+      <select id="toLang">
+        <option value="en" selected>English</option>
+        <option value="ta">Tamil</option>
+      </select>
+    </div>
+
+    <div id="outputText" class="outputBox"></div>
+
+    <button onclick="speakOut()">🔊 Play</button>
+
+  </div>
+
+</div>
+
+<div class="center">
+  <button onclick="translateNow()">🔁 Translate</button>
+</div>
+
+<!-- ResponsiveVoice -->
+<script src="https://code.responsivevoice.org/responsivevoice.js?key=YOUR_KEY"></script>
+
+<script>
+
+// ---------- POPUP ----------
+function showPopup(msg){
+  let pop = document.getElementById("popup");
+  pop.innerText = msg;
+  pop.style.display = "block";
+  setTimeout(()=>{ pop.style.display="none"; },2000);
+}
+
+
+// ----------- TRANSLATION API ------------
+async function translateAPI(text, from, to){
+
+  let f = (from === "ta") ? "ta" : "en";
+  let t = (to === "ta") ? "ta" : "en";
+
+  const apis = [
+    {
+      url:"https://libretranslate.de/translate",
+      body:(text,f,t)=>({q:text, source:f, target:t, format:"text"})
+    },
+    {
+      url:"https://translate.astian.org/translate",
+      body:(text,f,t)=>({q:text, source:f, target:t, format:"text"})
+    },
+    {
+      url:(text,f,t)=>`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${f}|${t}`,
+      memory:true
+    }
+  ];
+
+  for(let api of apis){
+    try{
+      if(api.memory){
+        let res = await fetch(api.url(text,f,t));
+        let data = await res.json();
+        if(data?.responseData?.translatedText){
+          return data.responseData.translatedText;
+        }
+      } else {
+        let res = await fetch(api.url,{
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body:JSON.stringify(api.body(text,f,t))
+        });
+
+        let data = await res.json();
+        if(data?.translatedText) return data.translatedText;
+      }
+    } catch(err){
+      console.log("API failed → next...");
+    }
+  }
+  return null;
+}
+
+
+
+// ----------- TRANSLATE BUTTON ----------
+async function translateNow(){
+
+  let text = document.getElementById("inputText").value.trim();
+  let from = document.getElementById("fromLang").value;
+  let to   = document.getElementById("toLang").value;
+
+  if(text === ""){
+    showPopup("Type / Speak something!");
+    return;
+  }
+
+  if(from === to){
+    showPopup("⚠️ Input and Output languages are the same!");
+    return;
+  }
+
+  document.getElementById("outputText").innerText = "⏳ Translating…";
+
+  let result = await translateAPI(text, from, to);
+
+  if(result)
+    document.getElementById("outputText").innerText = result;
+  else
+    document.getElementById("outputText").innerText = "❌ Translation Failed";
+}
+
+
+
+// ----------- VOICE INPUT -----------
+function startVoice(){
+
+  let from = document.getElementById("fromLang").value;
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recog = new SR();
+
+  recog.interimResults = false;
+  recog.continuous = false;
+
+  recog.lang = (from === "ta") ? "ta-IN" : "en-US";
+
+  recog.onresult = function(e){
+    document.getElementById("inputText").value =
+      e.results[0][0].transcript.trim();
+  }
+
+  recog.onerror = function(e){
+    showPopup("🎤 Tamil recognition not supported. Use Chrome.");
+  }
+
+  recog.start();
+}
+
+
+
+// ----------- VOICE OUTPUT -----------
+function speakOut() {
+
+  let text = document.getElementById("outputText").innerText;
+  let to = document.getElementById("toLang").value;
+
+  if(text.trim() === ""){
+    alert("No text to speak!");
+    return;
+  }
+
+  let speak = new SpeechSynthesisUtterance(text);
+
+  // Set language based on selected output
+  speak.lang = (to === "ta") ? "ta-IN" : "en-US";
+  speak.rate = 1;
+  speak.pitch = 1;
+
+  function setVoice(){
+    let voices = speechSynthesis.getVoices();
+
+    // Try to find Tamil voice
+    let tamilVoice = voices.find(v => 
+      v.lang.toLowerCase().includes("ta")
+    );
+
+    // Try to find English voice
+    let englishVoice = voices.find(v =>
+      v.lang.toLowerCase().includes("en")
+    );
+
+    if(to === "ta" && tamilVoice){
+      speak.voice = tamilVoice;
+    } 
+    else if(to === "en" && englishVoice){
+      speak.voice = englishVoice;
+    }
+
+    speechSynthesis.speak(speak);
+  }
+
+  // If voices not loaded – wait
+  if(speechSynthesis.getVoices().length === 0){
+    speechSynthesis.onvoiceschanged = setVoice;
+  } else {
+    setVoice();
+  }
+}
+
+</script>
+
+</body>
+</html>
