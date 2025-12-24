@@ -80,7 +80,15 @@ textarea{
   margin-top:8px;
   border-radius:10px;
   font-size:18px;
+
+  /* ⭐ Important Fix ⭐ */
+  overflow-y:auto;            /* scroll add */
+  overflow-x:hidden;          /* sideways leak stop */
+  word-wrap:break-word;
+  overflow-wrap:break-word;
+  white-space:pre-wrap;        /* lines neatly wrap */
 }
+
 
 button{
   background:#00c3ff;
@@ -338,3 +346,4 @@ function speakOut() {
 
 </body>
 </html>
+
